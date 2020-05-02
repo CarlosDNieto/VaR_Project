@@ -1,0 +1,213 @@
+---
+title: "Proyecto VaR Métodos 2020-02"
+author: "Carlos David Nieto Loya (416073542)"
+date: "30 de abril de 2020"
+output:
+  html_document: default
+  word_document: default
+---
+
+### Funciones y Fuentes de datos
+Primero vamos a leer los precios de la base de datos y además hacemos una función para calcular los rendimientos de nuestros precios.
+````{r, echo=TRUE}
+# Cargamos nuestros datos
+df <- read.csv("prices.csv")
+
+# Funcion que devuelve los rendimientos de los precios de un activo
+get_rendimientos <- function(precios){
+  # Inicializamos vector de rendimientos
+  r <- c()
+
+  # Lo llenamos mediante un for loop
+  for(i in 1:(length(precios)-1)){
+    r[i] <- (precios[i+1]/precios[i]) - 1
+  }
+
+  # Regresamos el vector de rendimientos
+  return(r)
+}
+````
+
+### Rendimientos
+Calculamos los rendimientos y los almacenamos en una matriz y graficamos el histograma de estos rendimientos donde podemos ver que no es erróneo suponer normalidad.
+````{r, echo=TRUE}
+n <- 5 # numero de activos
+
+# R = Matriz de Rendimientos
+# aqui vamos a almacenar los rendimientos
+R <- matrix(nrow = dim(df)[1]-1, ncol = n)
+for(i in 1:n){
+  R[,i] <- get_rendimientos(df[,i])
+}
+hist(R, main = "Histograma de Rendimientos", xlab = "Rendimiento")
+````
+
+### Esperanza de los Rendimientos ($E_t$)
+Calculamos esta esperanza de cada uno de los rendimientos sacando el promedio de éstos, así obtenemos $E_t$
+````{r, echo=TRUE}
+# mius = vector de Esperanzas de los rendimientos
+mius <- c()
+
+for(i in 1:dim(R)[2]){
+  # promedio de cada activo
+  mius[i] <- mean(R[,i])
+}
+
+print("Vector de Esperanzas")
+print(mius)
+````
+
+## Portafolio de Mínima Varianza
+
+---
+
+Calculamos la matriz de varianzas y covarianzas de los rendimientos junto con su inversa y un vector de unos para poder calcular lo siguiente:
+
+* $w$: Vector de ponderaciones del portafolio de mínima varianza.
+* $\mu$: Esperanza del portafolio de mínima varianza.
+* $Var(P)$: Varianza del portafolio de mínima varianza.
+````{r, echo=TRUE}
+# M = Matriz de Varianzas y Covarianzas
+M <- var(R)
+
+# M.inv = Matriz de Varianzas y Covarianzas Inversa
+M.inv <- solve(M)
+
+# Vector de unos
+unos <- rep(1,5)
+
+# w =  Vector de ponderaciones del portafolio de min var
+denom <- ((t(unos)%*% M.inv) %*% unos)
+w <- (t(unos)%*% M.inv)/denom[1,1]
+# verificamos que la suma sea 1
+print(sum(w))
+
+# miu = Esperanza del portafolio de minima varianza
+miu <- sum(w*mius)
+
+# var.p = Varianza del Portafolio de minima varianza
+var.p <- w%*%M%*%t(w)
+````
+
+### VaR (Paramétrico - normal multivariada)
+Con lo calculado anteriormente podemos calcular el **VaR**. También suponemos que el monto de nuestra inversión es de 1,000,000 de pesos para poder aproximar la pérdida máxim probable.
+
+
+* **VaR con $\alpha = 0.01$**
+````{r, echo=TRUE}
+# suponemos monto = 1,000,000
+m <- 1000000
+
+# VaR con alpha = 0.01
+alpha1 <- 0.01
+VaR1 <- qnorm(1-alpha1) * sqrt(var.p) + miu #Calculo de VaR
+perdida1 <- format(m*VaR1, nsmall=2, big.mark = ",") #Calculo de perdida max
+porcentaje1 <- paste(toString(100*(1-alpha1)),'%')
+sprintf("VaR al %s de confianza: %.6f",porcentaje1,VaR1)
+sprintf("Perdida Maxima: %s", perdida1)
+````
+
+* **VaR con $\alpha = 0.05$**
+````{r, echo=TRUE}
+# VaR con alpha = 0.05
+alpha2 <- 0.05
+VaR2 <- qnorm(1-alpha2) * sqrt(var.p) + miu #Calculo de VaR
+perdida2 <- format(m*VaR2, nsmall=2, big.mark = ",") #Calculo de perdida max
+porcentaje2 <- paste(toString(100*(1-alpha2)),'%')
+sprintf("VaR al %s de confianza: %.6f",porcentaje2,VaR2)
+sprintf("Perdida Maxima: %s", perdida2)
+````
+
+* **VaR con $\alpha = 0.1$**
+````{r, echo=TRUE}
+# VaR con alpha = 0.1
+alpha3 <- 0.1
+VaR3 <- qnorm(1-alpha3) * sqrt(var.p) + miu #Calculo de VaR
+perdida3 <- format(m*VaR3, nsmall=2, big.mark = ",") #Calculo de perdida max
+porcentaje3 <- paste(toString(100*(1-alpha3)),'%')
+sprintf("VaR al %s de confianza: %.6f",porcentaje3,VaR3)
+sprintf("Perdida Maxima: %s", perdida3)
+````
+
+
+## Conclusiones
+
+---
+
+````{r, echo=TRUE}
+# DataFrame de resultados
+Alpha <- c(alpha1,alpha2,alpha3)
+VaR <- c(VaR1,VaR2,VaR3)
+Perdida_Max <- c(perdida1, perdida2, perdida3)
+df.resultados <- data.frame(Alpha, VaR, Perdida_Max)
+print(df.resultados)
+
+# Grafica
+barplot(df.resultados$VaR,
+        main = "VaR del Portafolio de Minima Varianza",
+        names.arg = Alpha,
+        col = "darkblue",
+        xlab = "Alpha",
+        ylab = "VaR",
+        horiz=FALSE)
+````
+
+Podemos ver que el VaR va aumentando conforme el nivel de significancia $\alpha$ disminuye, eso quiere decir que para tener un porcentaje mayor de confianza la pérdida máxima probable también aumenta.
+
+## VaR de los Portafolios de Cada acción
+
+---
+
+Análogamente al portafolio de mínima varianza, calculamos el VaR para cada activo.
+````{r, echo=TRUE}
+# vector de VaR's
+VaR.acciones <- c()
+
+# para cada activo
+for(i in 1:5){
+  
+  # Esperanza
+  e <- mius[i]
+  
+  # Varianza
+  v <- M[i,i]
+  
+  VaR.acciones[i] <- qnorm(1-alpha2) * sqrt(v) + e
+}
+
+# Nombres de acciones
+Acciones <- c("A","B","C","D","E")
+Acciones[6] <- "MinVar"
+
+# Perdida Maxima Probable
+Perdidas.acciones <- VaR.acciones * m
+Perdidas.acciones[6] <- m*VaR2
+
+# Agregamos el VaR del port de minima varianza
+VaR.acciones[6] <- VaR2
+
+# DataFrame de los VaR para cada accion
+VaRs.df <- data.frame(Acciones, VaR.acciones, Perdidas.acciones)
+print(VaRs.df)
+barplot(VaRs.df$Perdidas.acciones/1000,
+        main = "Perdida Maxima Probable de una Inversion de 1 Millon\npara alpha=0.05",
+        names.arg = Acciones,
+        col = "darkred",
+        xlab = "Portafolio / Accion",
+        ylab = "Miles de Pesos",
+        horiz=FALSE)
+````
+
+Como era de esperarse podemos ver que el VaR es menor para el portafolio de mínima varianza comparandolo contra los activos individuales. Esto se refleja en que la pérdida máxima probable es menor en el portafolio de mínima varianza que en los otros.
+
+
+
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+
+FIN
